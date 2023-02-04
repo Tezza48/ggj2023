@@ -1,5 +1,6 @@
 import { AdminEnemy, EscapeCodes, escapeString } from ".";
 
+// List of words from https://www.mit.edu/~ecprice/wordlist.10000
 import wordMap from "./wordMap.json";
 
 export class HackingGame {
