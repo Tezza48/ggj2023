@@ -32,19 +32,25 @@ export declare class Item {
     parent?: Dir;
     constructor(name: string);
     printName(): string;
+    setDirectory(dir: Dir): void;
+    /**
+     * Removes an item from the filesystem.
+     */
     remove(): void;
+    fullPath(): string;
 }
 export declare class Dir extends Item {
+    visited: boolean;
     parent?: Dir;
     items: Record<string, Item>;
-    constructor(name: string, items?: Item[]);
+    constructor(name: `${string}/`, items?: Item[]);
     printName(): string;
-    fullPath(): string;
     onLook(): string;
 }
 export declare class AdminEnemy extends Item {
-    static NumEnemies: number;
-    constructor(name: string);
+    static AllAdmins: AdminEnemy[];
+    dificulty: number;
+    constructor(name: string, dificulty: number);
     printName(): string;
     remove(): void;
 }

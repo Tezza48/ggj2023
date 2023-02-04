@@ -4,7 +4,7 @@ export declare class HackingGame {
     correctWord: string;
     enemy: AdminEnemy;
     attempts: number;
-    constructor(enemy: AdminEnemy, wordLength: number, numWords: number);
+    constructor(enemy: AdminEnemy);
     guess(word: string): {
         readonly type: "complete";
         readonly value?: undefined;

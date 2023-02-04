@@ -53,6 +53,14 @@ let locationPrefix = escapeString(
 );
 const spacer = escapeString(" :: ", EscapeCodes.FgCyan, EscapeCodes.Dim);
 
+const printMessage = (message: string) => {
+    console.log(
+        escapeString("m3ss4ge", EscapeCodes.FgGray, EscapeCodes.Blink) +
+            spacer +
+            escapeString(message, EscapeCodes.FgGray, EscapeCodes.Blink)
+    );
+};
+
 export class Item {
     name: string;
     parent?: Dir;
@@ -74,6 +82,9 @@ export class Item {
         this.parent = dir;
     }
 
+    /**
+     * Removes an item from the filesystem.
+     */
     remove() {
         delete this.parent?.items[this.name];
     }
@@ -83,12 +94,24 @@ export class Item {
     }
 }
 
+class TextFile extends Item {
+    text: string;
+    public constructor(name: `${string}.txt`, text: string) {
+        super(name);
+
+        this.text = text;
+    }
+    onRead(): string {
+        return this.text;
+    }
+}
+
 export class Dir extends Item {
     visited: boolean;
     parent?: Dir;
     items: Record<string, Item>;
 
-    constructor(name: string, items?: Item[]) {
+    constructor(name: `${string}/`, items?: Item[]) {
         super(name);
 
         this.visited = false;
@@ -153,11 +176,30 @@ export class AdminEnemy extends Item {
     }
 }
 
+class ImportantFile extends Item {
+    value: number;
+    constructor(name: string, value: number) {
+        super(name);
+
+        this.value = value;
+    }
+    printName(): string {
+        return (
+            escapeString(this.name, EscapeCodes.FgYellow, EscapeCodes.BgBlack) +
+            escapeString(
+                "\t(" + this.value.toString() + "MB)",
+                EscapeCodes.Dim,
+                EscapeCodes.BgBlack
+            )
+        );
+    }
+}
+
 const levelRoot = new Dir("/", [
     new Dir("user/", [
         new Dir("tez/", [
-            new AdminEnemy("AdminTez", 5),
             new Dir("code/", [new Dir("game_jam/")]),
+            new AdminEnemy("AdminTez", 5),
         ]),
         new Dir("history/", [new Dir("skyrim_mods/")]),
         new Dir("admin/"),
@@ -171,6 +213,20 @@ const levelRoot = new Dir("/", [
     new Dir("programs/", [
         new Dir("macrohard/", [new AdminEnemy("Hax0rDltr", 10)]),
     ]),
+    new TextFile(
+        "README.txt",
+        `
+You've connected to a highly secure mainframe.
+All files are to be treated as highly confidential.
+Under no circumstances may important files 
+(indicated by their distinctive names: ${new ImportantFile(
+            "ImportantFile",
+            5
+        ).printName()})
+be deleted and most importantly copied.
+`
+    ),
+    new ImportantFile("plaintext_passwords", 5),
 ]);
 
 class Player {
@@ -179,6 +235,8 @@ class Player {
     health: number = 10;
 
     turnsInDirectory = 0;
+
+    dataStolen = 0;
 
     printHealth(): string {
         let str = "";
@@ -258,6 +316,79 @@ const commands = {
             );
         },
     },
+    read: {
+        desc: "Displays the contents of a .txt file.",
+        exec([filename]) {
+            const file = player.location.items[filename];
+            if (file && file instanceof TextFile) {
+                console.log(file.onRead());
+                return;
+            }
+
+            console.log(
+                escapeString("No Text file named: ", EscapeCodes.FgYellow),
+                filename
+            );
+        },
+    },
+    steal: {
+        desc: "[filename] Steals an important file.",
+        exec([filename]) {
+            const file = player.location.items[filename];
+            if (file && file instanceof ImportantFile) {
+                player.dataStolen += file.value;
+                file.remove();
+                printMessage(
+                    file.printName() +
+                        " has been stolen. +" +
+                        file.value.toString() +
+                        "MB"
+                );
+                return;
+            }
+
+            console.log(
+                escapeString("No Important file named: ", EscapeCodes.FgYellow),
+                filename
+            );
+        },
+    },
+    quit: {
+        desc: "Exit the game. Quit while your ahead before the admins steal your data back.",
+        exec() {
+            console.log(
+                "QUITTING" +
+                    spacer +
+                    "total data stolen is " +
+                    player.dataStolen.toString() +
+                    "MB."
+            );
+
+            const message = "THANK YOU FOR PLAYING";
+
+            const colors = [
+                EscapeCodes.FgRed,
+                EscapeCodes.FgYellow,
+                EscapeCodes.FgGreen,
+                EscapeCodes.FgCyan,
+                EscapeCodes.FgBlue,
+                EscapeCodes.FgMagenta,
+            ];
+
+            let str = "\t\t";
+
+            for (let i = 0; i < message.length; i++) {
+                str += escapeString(
+                    message[i],
+                    EscapeCodes.Blink,
+                    colors[i % colors.length]
+                );
+            }
+
+            printMessage(str);
+        },
+    },
+
     help: {
         desc: "Displays descriptions of all commands.",
         exec() {
@@ -274,7 +405,8 @@ const commands = {
                             )
                         );
                     })
-                    .join("\n")
+                    .join("\n"),
+                "\n"
             );
         },
     },
@@ -299,48 +431,50 @@ let traverseMoves = 0;
 
 const tickAdminAi = () => {
     traverseMoves++;
-    if (traverseMoves % aiMoveInterval === 0) {
-        for (const admin of AdminEnemy.AllAdmins) {
-            if (admin.parent == player.location) {
-                continue;
-            }
+    if (traverseMoves % aiMoveInterval != 0) return;
 
-            const moveDir = Math.random() > 0.5 ? "parent" : "child";
+    for (const admin of AdminEnemy.AllAdmins) {
+        if (admin.parent == player.location) {
+            continue;
+        }
 
-            const oldParent = admin.parent!;
+        const moveDir = Math.random() > 0.5 ? "parent" : "child";
 
-            switch (moveDir) {
-                case "child":
-                    const dirsInParent = Object.values(
-                        admin.parent!.items
-                    ).filter((e) => e instanceof Dir) as Dir[];
+        const oldParent = admin.parent!;
 
-                    if (dirsInParent.length > 0) {
-                        const newDir =
-                            dirsInParent[
-                                Math.floor(Math.random() * dirsInParent.length)
-                            ];
-                        admin.setDirectory(newDir);
-                    }
-                    break;
-                case "parent":
-                    if (admin.parent?.parent) {
-                        const newDir = admin.parent.parent;
-                        admin.setDirectory(newDir);
-                    }
-                    break;
-            }
+        switch (moveDir) {
+            case "child":
+                const dirsInParent = Object.values(admin.parent!.items).filter(
+                    (e) => e instanceof Dir
+                ) as Dir[];
 
-            if (admin.parent !== oldParent) {
-                // console.log(
-                //     escapeString(
-                //         admin.name + " moved to " + admin.fullPath(),
-                //         EscapeCodes.Dim
-                //     )
-                // );
-            }
+                if (dirsInParent.length > 0) {
+                    const newDir =
+                        dirsInParent[
+                            Math.floor(Math.random() * dirsInParent.length)
+                        ];
+                    admin.setDirectory(newDir);
+                }
+                break;
+            case "parent":
+                if (admin.parent?.parent) {
+                    const newDir = admin.parent.parent;
+                    admin.setDirectory(newDir);
+                }
+                break;
+        }
+
+        if (admin.parent !== oldParent) {
+            // console.log(
+            //     escapeString(
+            //         admin.name + " moved to " + admin.fullPath(),
+            //         EscapeCodes.Dim
+            //     )
+            // );
         }
     }
+
+    printMessage("Admins have moved");
 };
 
 const handleTraverseInput = (value: string) => {
@@ -357,6 +491,12 @@ const handleTraverseInput = (value: string) => {
         command.exec(args.slice(1));
     }
 
+    if (command === commands.quit) {
+        // Stop the game immediately
+        rl.close();
+        return;
+    }
+
     getNextInput();
 };
 
@@ -367,9 +507,10 @@ const handleHackingInput = (value: string) => {
         case "complete":
             currentHackingGame.enemy.remove();
             console.log(
-                escapeString("SUCCESS :: ", EscapeCodes.FgGreen) +
+                escapeString("SUCCESS", EscapeCodes.FgGreen) +
+                    spacer +
                     currentHackingGame.enemy.printName() +
-                    escapeString(" Deleted", EscapeCodes.FgGreen)
+                    escapeString(" DELETED", EscapeCodes.FgGreen)
             );
 
             // Restore 3 health by removing enemy
@@ -385,7 +526,20 @@ const handleHackingInput = (value: string) => {
             return;
 
         case "failed":
-            console.log(escapeString("FAILURE: LockOut initiated"));
+            const dataLostPerFailure = 3;
+            printMessage("FAILURE: LockOut initiated. ");
+            printMessage(
+                "Data lost: " +
+                    escapeString(
+                        "-" + dataLostPerFailure.toString() + "MB",
+                        EscapeCodes.FgGray
+                    )
+            );
+
+            player.dataStolen = Math.max(
+                player.dataStolen - dataLostPerFailure,
+                0
+            );
 
             currentState = GameState.TRAVERSE;
             getNextInput();
@@ -393,7 +547,7 @@ const handleHackingInput = (value: string) => {
     }
 };
 
-let currentHackingGame: HackingGame; //= new HackingGame(new AdminEnemy("TesstEnemy"), 5, 15);
+let currentHackingGame: HackingGame;
 
 const getNextInput = () => {
     switch (currentState) {
@@ -413,28 +567,29 @@ const getNextInput = () => {
 
                 if (!!damage) {
                     player.health -= damage;
-                    console.log(
-                        escapeString(
-                            "\tYou have taken ",
-                            EscapeCodes.BgGray,
-                            EscapeCodes.FgYellow
-                        ) +
+
+                    printMessage(
+                        escapeString("\tYou have taken ") +
                             escapeString(
                                 damage.toString(),
-                                EscapeCodes.BgGray,
                                 EscapeCodes.FgCyan
                             ) +
-                            escapeString(
-                                " Damage\t",
-                                EscapeCodes.BgGray,
-                                EscapeCodes.FgYellow
-                            )
+                            escapeString(" Damage\t")
                     );
                 }
             }
 
             if (player.health <= 0) {
-                console.log("\n", "You got caught");
+                console.log(
+                    "\n",
+                    "You got caught",
+                    "\nYou successfully stole" +
+                        escapeString(
+                            player.dataStolen.toString() + "MB",
+                            EscapeCodes.FgGray
+                        ) +
+                        "of data."
+                );
                 rl.close();
                 return;
             }
@@ -443,6 +598,8 @@ const getNextInput = () => {
                 locationPrefix +
                     spacer +
                     player.printHealth() +
+                    " " +
+                    escapeString(player.dataStolen + "MB", EscapeCodes.FgGray) +
                     spacer +
                     escapeString(
                         player.location.fullPath() + ">",
@@ -473,6 +630,14 @@ const getNextInput = () => {
             break;
     }
 };
+
+console.log(
+    escapeString(`
+Welcome to ROOTUSER, hack into the mainfraim and steal as much data as you can.
+Be sure not to get deleted by the ADMINs, they will steal back data from you.
+If you're in too deep you can 'quit' while youre ahead to leave with whatever
+data you've got so far.\n\n`)
+);
 
 commands["help"].exec();
 

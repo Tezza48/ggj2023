@@ -45,8 +45,6 @@ export class HackingGame {
         let similarity = 0;
 
         for (let charIndex = 0; charIndex < word.length; charIndex++) {
-            let match = false;
-
             if (this.correctWord[charIndex] === word[charIndex]) similarity++;
         }
 
@@ -54,7 +52,7 @@ export class HackingGame {
     }
 
     printBoard() {
-        console.log("\n\n\tHacking ::" + this.enemy.printName());
+        console.log("\n\n\tHacking :: " + this.enemy.printName());
         console.log(
             escapeString(
                 "Similarity indicates how many letters in your guess are:\n\t1) In the correct word\n\t2) In the correct position\n(Similar to getting green letters in a certain popular daily puzzle",
