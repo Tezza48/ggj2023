@@ -1,4 +1,6 @@
-import { AdminEnemy, wordMap } from ".";
+import { AdminEnemy } from ".";
+
+import wordMap from "./wordMap.json";
 
 export class HackingGame {
     words: string[];
@@ -12,7 +14,9 @@ export class HackingGame {
     constructor(enemy: AdminEnemy, wordLength: number, numWords: number) {
         this.enemy = enemy;
 
-        const all = wordMap[wordLength];
+        const all = (wordMap as Record<string, string[]>)[
+            wordLength.toString()
+        ];
         this.words = [];
 
         this.attempts = 3;

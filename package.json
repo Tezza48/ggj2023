@@ -4,15 +4,17 @@
   "description": "",
   "main": "./lib/index.js",
   "bin": {
-    "ggl2023": "./lib/index.js"
+    "ggj2023": "./lib/index.js"
   },
   "scripts": {
     "start": "nodemon --watch 'src/**/*.ts' --exec 'ts-node' src/index.ts",
     "start:windows": "nodemon --watch 'src/**/*.ts' --exec \"npx ts-node\" src/index.ts",
     "create": "npm run build && npm run test",
     "build": "tsc -p .",
-    "local": "sudo npm i -g && pizza",
-    "refresh": "rm -rf ./node_modules ./package-lock.json && npm install"
+    "local": "sudo npm i -g && ggj2023",
+    "refresh": "rm -rf ./node_modules ./package-lock.json && npm install",
+
+    "rebuildWordMap": "node scripts/rebuildWordMap.js"
   },
   "author": "",
   "license": "ISC",

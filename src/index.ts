@@ -1,8 +1,5 @@
 #!/usr/bin/env node
 
-import { create } from "domain";
-import { readFile, readFileSync } from "fs";
-import { openStdin, stdin } from "process";
 import * as readline from "readline";
 import { HackingGame } from "./HackingGame";
 
@@ -43,16 +40,6 @@ export function escapeString(value: string, ...escapes: EscapeCodes[]) {
         EscapeCodes.Reset
     }m`;
 }
-
-export const wordList = readFileSync("./src/wordlist.txt", "utf-8");
-
-export const wordMap = wordList.split("\r\n").reduce((map, current) => {
-    if (!map[current.length]) map[current.length] = [];
-
-    map[current.length].push(current);
-
-    return map;
-}, {} as Record<number, string[]>);
 
 const rl = readline.createInterface({
     input: process.stdin,
@@ -97,6 +84,10 @@ export class Dir extends Item {
         }
     }
 
+    printName(): string {
+        return escapeString(super.printName(), EscapeCodes.FgCyan);
+    }
+
     fullPath(): string {
         return this.parent ? this.parent.fullPath() + this.name : this.name;
     }
@@ -132,9 +123,29 @@ export class AdminEnemy extends Item {
     }
 }
 
-const levelRoot = new Dir("/", [new Dir("user/"), new AdminEnemy("AdminTez")]);
-
-let currentLocation = levelRoot;
+// prettier-ignore
+const levelRoot = 
+new Dir("/", [
+    new Dir("user/", [
+        new Dir("tez/", [
+            new Dir("code/", [
+                new Dir("game_jam/")
+            ]),
+            new AdminEnemy("AdminTez"),
+        ]),
+        new Dir("history/", [
+            new Dir("skyrim_mods/")
+        ]),
+        new Dir("admin/"),
+    ]),
+    new Dir("device/", [
+        new Dir("gpu/", [
+            new Dir("drivers/"), 
+            new AdminEnemy("AdminVulkan")
+        ]),
+    ]),
+    new Dir("programs/"),
+]);
 
 const maxHealth = 10;
 let health = 10;
@@ -156,13 +167,13 @@ function printHealth() {
 
 const commands = {
     look: {
-        desc: "Shows the current dir contents",
+        desc: "Shows the current dir contents.",
         exec(otherArgs: string[]) {
             console.log(currentLocation.onLook(), "\n");
         },
     },
     goto: {
-        desc: "Changes to the specified directory",
+        desc: "[dir name] Changes to the specified directory.",
         exec(otherArgs: string[]) {
             if (otherArgs.length !== 1) {
                 console.log("Too many args");
@@ -183,7 +194,7 @@ const commands = {
         },
     },
     attack: {
-        desc: "Attack the admins in this directory",
+        desc: "[target name] Attack a root admin.",
         exec([enemyName]) {
             const enemy = currentLocation.items[enemyName];
             if (enemy && enemy instanceof AdminEnemy) {
@@ -198,7 +209,27 @@ const commands = {
             );
         },
     },
-} as Record<string, { desc: string; exec: (args: string[]) => void }>;
+    help: {
+        desc: "Displays descriptions of all commands.",
+        exec() {
+            console.log(
+                Object.entries(commands)
+                    .map(([key, { desc }]) => {
+                        return (
+                            escapeString(key + ":") +
+                            " " +
+                            escapeString(
+                                desc,
+                                EscapeCodes.FgYellow,
+                                EscapeCodes.Dim
+                            )
+                        );
+                    })
+                    .join("\n")
+            );
+        },
+    },
+} satisfies Record<string, { desc: string; exec: (args: string[]) => void }>;
 
 enum GameState {
     TRAVERSE,
@@ -210,7 +241,7 @@ let currentState = GameState.TRAVERSE;
 const handleTraverseInput = (value: string) => {
     const args = value.split(" ");
 
-    const command = commands[args[0]];
+    const command = commands[args[0] as keyof typeof commands];
     if (!command) {
         console.log("Unknown Command: ", args[0]);
     } else {
@@ -242,18 +273,17 @@ const getNextInput = () => {
                 console.log(
                     escapeString(
                         "\tYou have taken ",
-                        EscapeCodes.BgCyan,
+                        EscapeCodes.BgGray,
                         EscapeCodes.FgYellow
                     ) +
                         escapeString(
                             damage.toString(),
-                            EscapeCodes.BgCyan,
-                            EscapeCodes.FgYellow,
-                            EscapeCodes.Dim
+                            EscapeCodes.BgGray,
+                            EscapeCodes.FgCyan
                         ) +
                         escapeString(
                             " Damage\t",
-                            EscapeCodes.BgCyan,
+                            EscapeCodes.BgGray,
                             EscapeCodes.FgYellow
                         )
                 );
@@ -325,16 +355,6 @@ const getNextInput = () => {
     }
 };
 
-console.log(
-    Object.entries(commands)
-        .map(([key, { desc }]) => {
-            return (
-                escapeString(key + ":") +
-                " " +
-                escapeString(desc, EscapeCodes.FgYellow, EscapeCodes.Dim)
-            );
-        })
-        .join("\n")
-);
+commands["help"].exec();
 
 getNextInput();
