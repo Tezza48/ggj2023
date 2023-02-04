@@ -1,4 +1,4 @@
-import { AdminEnemy } from ".";
+import { AdminEnemy, EscapeCodes, escapeString } from ".";
 
 import wordMap from "./wordMap.json";
 
@@ -55,6 +55,12 @@ export class HackingGame {
 
     printBoard() {
         console.log("\n\n\tHacking ::" + this.enemy.printName());
+        console.log(
+            escapeString(
+                "Similarity indicates how many letters in your guess are:\n\t1) In the correct word\n\t2) In the correct position\n(Similar to getting green letters in a certain popular daily puzzle",
+                EscapeCodes.Dim
+            )
+        );
         console.log(this.words.join("\n"));
     }
 }

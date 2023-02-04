@@ -154,7 +154,6 @@ export class AdminEnemy extends Item {
 }
 
 const levelRoot = new Dir("/", [
-    new AdminEnemy("Hax0rDltr", 10),
     new Dir("user/", [
         new Dir("tez/", [
             new AdminEnemy("AdminTez", 5),
@@ -179,6 +178,8 @@ class Player {
     readonly maxHealth = 10;
     health: number = 10;
 
+    turnsInDirectory = 0;
+
     printHealth(): string {
         let str = "";
         for (let i = 1; i <= this.maxHealth; i++) {
@@ -201,10 +202,15 @@ class Player {
 
         return str;
     }
+
+    setLocation(dir: Dir) {
+        this.turnsInDirectory = 0;
+        this.location = dir;
+    }
 }
 
 const player = new Player();
-player.location = levelRoot;
+player.setLocation(levelRoot);
 
 const commands = {
     look: {
@@ -225,10 +231,10 @@ const commands = {
             const target = player.location.items[targetName];
 
             if (target && target instanceof Dir) {
-                player.location = target;
+                player.setLocation(target);
                 return;
             } else if (otherArgs[0] === "../") {
-                player.location = player.location.parent ?? player.location;
+                player.setLocation(player.location.parent ?? player.location);
             } else {
                 console.log("Cannot goto", targetName);
             }
@@ -400,29 +406,31 @@ const getNextInput = () => {
             }
 
             // If there's enemies in this room, take 1 damage per enemy
-            const damage = Object.values(player.location.items).filter(
-                (item) => item instanceof AdminEnemy
-            ).length;
+            if (player.turnsInDirectory > 0) {
+                const damage = Object.values(player.location.items).filter(
+                    (item) => item instanceof AdminEnemy
+                ).length;
 
-            if (!!damage) {
-                player.health -= damage;
-                console.log(
-                    escapeString(
-                        "\tYou have taken ",
-                        EscapeCodes.BgGray,
-                        EscapeCodes.FgYellow
-                    ) +
+                if (!!damage) {
+                    player.health -= damage;
+                    console.log(
                         escapeString(
-                            damage.toString(),
-                            EscapeCodes.BgGray,
-                            EscapeCodes.FgCyan
-                        ) +
-                        escapeString(
-                            " Damage\t",
+                            "\tYou have taken ",
                             EscapeCodes.BgGray,
                             EscapeCodes.FgYellow
-                        )
-                );
+                        ) +
+                            escapeString(
+                                damage.toString(),
+                                EscapeCodes.BgGray,
+                                EscapeCodes.FgCyan
+                            ) +
+                            escapeString(
+                                " Damage\t",
+                                EscapeCodes.BgGray,
+                                EscapeCodes.FgYellow
+                            )
+                    );
+                }
             }
 
             if (player.health <= 0) {
@@ -443,6 +451,8 @@ const getNextInput = () => {
                     ),
                 handleTraverseInput
             );
+
+            player.turnsInDirectory++;
             break;
         case GameState.COMBAT:
             currentHackingGame.printBoard();
