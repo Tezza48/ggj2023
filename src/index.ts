@@ -95,12 +95,13 @@ export class Item {
 }
 
 class TextFile extends Item {
-    text: string;
-    public constructor(name: `${string}.txt`, text: string) {
+    text: string = "There is nothing of interest in this file.";
+    public constructor(name: `${string}.txt`, text?: string) {
         super(name);
 
-        this.text = text;
+        if (text) this.text = text;
     }
+
     onRead(): string {
         return this.text;
     }
@@ -151,11 +152,15 @@ export class AdminEnemy extends Item {
     static AllAdmins: AdminEnemy[] = [];
     dificulty: number;
 
-    constructor(name: string, dificulty: number) {
+    moveInterval: number;
+
+    constructor(name: string, dificulty: number, moveInterval: number) {
         super(name);
 
         this.dificulty = dificulty;
         AdminEnemy.AllAdmins.push(this);
+
+        this.moveInterval = moveInterval;
     }
 
     printName() {
@@ -198,20 +203,43 @@ class ImportantFile extends Item {
 const levelRoot = new Dir("/", [
     new Dir("user/", [
         new Dir("tez/", [
-            new Dir("code/", [new Dir("game_jam/")]),
-            new AdminEnemy("AdminTez", 5),
+            new Dir("code/", [
+                new Dir("game_jam/", [
+                    new TextFile("hacking-game.txt", "// TODO: Make game."),
+                    new ImportantFile("node_modules", 20),
+                ]),
+            ]),
+            new AdminEnemy("AdminTez", 5, 2),
         ]),
-        new Dir("history/", [new Dir("skyrim_mods/")]),
+        new Dir("historymaker/", [
+            new Dir("skyrim/", [
+                new ImportantFile("skyrim", 15),
+                new ImportantFile(".savefile", 20),
+            ]),
+        ]),
         new Dir("admin/"),
     ]),
     new Dir("device/", [
         new Dir("gpu/", [
             new Dir("drivers/"),
-            new AdminEnemy("AdminVulkan", 5),
+            new AdminEnemy("VulkanProgrammer", 6, 8),
         ]),
     ]),
     new Dir("programs/", [
-        new Dir("macrohard/", [new AdminEnemy("Hax0rDltr", 10)]),
+        new Dir("vim/", [new ImportantFile("vimconfig", 5)]),
+        new Dir("bank/", [
+            new Dir("misc/"),
+            new AdminEnemy("cfo", 5, -1),
+            new AdminEnemy("guardian", 6, -1),
+            new ImportantFile("crypto-keys", 40),
+        ]),
+        new Dir("macrohard/", [new AdminEnemy("HaxorDeletor", 10, 5)]),
+    ]),
+    new Dir("system/", [
+        new Dir("os/"),
+        new TextFile("keys.txt"),
+        new TextFile("registry.txt"),
+        new ImportantFile("private_keys", 10),
     ]),
     new TextFile(
         "README.txt",
@@ -227,6 +255,7 @@ be deleted and most importantly copied.
 `
     ),
     new ImportantFile("plaintext_passwords", 5),
+    new AdminEnemy("JuniorAdmin", 4, 1),
 ]);
 
 class Player {
@@ -420,7 +449,7 @@ enum GameState {
 let currentState = GameState.TRAVERSE;
 
 const aiMoveInterval = 3;
-let traverseMoves = 0;
+let turnNumber = 0;
 
 /**
  * Admins can move every n turns.
@@ -430,13 +459,15 @@ let traverseMoves = 0;
  */
 
 const tickAdminAi = () => {
-    traverseMoves++;
-    if (traverseMoves % aiMoveInterval != 0) return;
+    turnNumber++;
 
+    let hasAnyMoved = false;
     for (const admin of AdminEnemy.AllAdmins) {
-        if (admin.parent == player.location) {
+        if (admin.parent == player.location || admin.moveInterval === -1) {
             continue;
         }
+
+        if (turnNumber % admin.moveInterval != 0) continue;
 
         const moveDir = Math.random() > 0.5 ? "parent" : "child";
 
@@ -465,6 +496,7 @@ const tickAdminAi = () => {
         }
 
         if (admin.parent !== oldParent) {
+            hasAnyMoved = true;
             // console.log(
             //     escapeString(
             //         admin.name + " moved to " + admin.fullPath(),
@@ -474,7 +506,7 @@ const tickAdminAi = () => {
         }
     }
 
-    printMessage("Admins have moved");
+    if (hasAnyMoved) printMessage("Admins have moved");
 };
 
 const handleTraverseInput = (value: string) => {
