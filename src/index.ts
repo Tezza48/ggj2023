@@ -4,10 +4,49 @@ import { create } from "domain";
 import { readFile, readFileSync } from "fs";
 import { openStdin, stdin } from "process";
 import * as readline from "readline";
+import { HackingGame } from "./HackingGame";
 
-const wordList = readFileSync("./src/wordlist.txt", "utf-8");
+console.clear();
 
-const wordMap = wordList.split("\r\n").reduce((map, current) => {
+export enum EscapeCodes {
+    Reset = "0",
+    Bright = "1",
+    Dim = "2",
+    Underscore = "4",
+    Blink = "5",
+    Reverse = "7",
+    Hidden = "8",
+
+    FgBlack = "30",
+    FgRed = "31",
+    FgGreen = "32",
+    FgYellow = "33",
+    FgBlue = "34",
+    FgMagenta = "35",
+    FgCyan = "36",
+    FgWhite = "37",
+    FgGray = "90",
+
+    BgBlack = "40",
+    BgRed = "41",
+    BgGreen = "42",
+    BgYellow = "43",
+    BgBlue = "44",
+    BgMagenta = "45",
+    BgCyan = "46",
+    BgWhite = "47",
+    BgGray = "100",
+}
+
+export function escapeString(value: string, ...escapes: EscapeCodes[]) {
+    return `\x1b[${(escapes ?? [EscapeCodes.Reset]).join(";")}m${value}\x1b[${
+        EscapeCodes.Reset
+    }m`;
+}
+
+export const wordList = readFileSync("./src/wordlist.txt", "utf-8");
+
+export const wordMap = wordList.split("\r\n").reduce((map, current) => {
     if (!map[current.length]) map[current.length] = [];
 
     map[current.length].push(current);
@@ -15,63 +54,19 @@ const wordMap = wordList.split("\r\n").reduce((map, current) => {
     return map;
 }, {} as Record<number, string[]>);
 
-class HackingGame {
-    words: string[];
-
-    attempts: number;
-
-    constructor(wordLength: number, numWords: number) {
-        const all = wordMap[wordLength];
-        this.words = [];
-
-        this.attempts = 3;
-
-        for (let i = 0; i < numWords; i++) {
-            const index = Math.floor(Math.random() * all.length);
-            this.words.push(all[index]);
-        }
-    }
-
-    guess(word: string) {
-        if (this.words.indexOf(word)) {
-            return { type: "complete" } as const;
-        }
-
-        this.attempts--;
-
-        let similarity = 0;
-
-        for (let charIndex = 0; charIndex < word.length; charIndex++) {
-            let match = false;
-
-            for (
-                let wordIndex = 0;
-                wordIndex < this.words.length;
-                wordIndex++
-            ) {
-                if (this.words[wordIndex][charIndex] === word[charIndex])
-                    match = true;
-            }
-
-            if (match) similarity++;
-        }
-
-        return { type: "similarity", value: similarity } as const;
-    }
-
-    printBoard() {
-        console.log(this.words.join("\n"));
-    }
-}
-
 const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
 });
 
-let locationPrefix = "r00tu53r :: ";
+let locationPrefix = escapeString(
+    "r00tu53r",
+    EscapeCodes.FgYellow,
+    EscapeCodes.Dim
+);
+const spacer = escapeString(" :: ", EscapeCodes.FgCyan, EscapeCodes.Dim);
 
-class Item {
+export class Item {
     name: string;
     parent?: Dir;
 
@@ -82,9 +77,13 @@ class Item {
     printName() {
         return this.name;
     }
+
+    remove() {
+        delete this.parent?.items[this.name];
+    }
 }
 
-class Dir extends Item {
+export class Dir extends Item {
     parent?: Dir;
     items: Record<string, Item>;
 
@@ -113,9 +112,23 @@ class Dir extends Item {
     }
 }
 
-class AdminEnemy extends Item {
+export class AdminEnemy extends Item {
+    static NumEnemies = 0;
+
+    constructor(name: string) {
+        super(name);
+
+        AdminEnemy.NumEnemies++;
+    }
+
     printName() {
-        return "\x1b[31m" + this.name + "\x1b[0m";
+        return escapeString(this.name, EscapeCodes.FgRed, EscapeCodes.Blink); //"\x1b[31m" + this.name + "\x1b[0m";
+    }
+
+    remove() {
+        super.remove();
+
+        AdminEnemy.NumEnemies--;
     }
 }
 
@@ -123,11 +136,29 @@ const levelRoot = new Dir("/", [new Dir("user/"), new AdminEnemy("AdminTez")]);
 
 let currentLocation = levelRoot;
 
+const maxHealth = 10;
+let health = 10;
+
+function printHealth() {
+    let str = "";
+    for (let i = 1; i <= maxHealth; i++) {
+        if (i < health) {
+            str += escapeString("▓", EscapeCodes.FgGreen, EscapeCodes.Bright);
+        } else if (i === health) {
+            str += escapeString("▒", EscapeCodes.FgGreen, EscapeCodes.Blink);
+        } else {
+            str += escapeString("░", EscapeCodes.FgRed, EscapeCodes.Dim);
+        }
+    }
+
+    return str;
+}
+
 const commands = {
     look: {
         desc: "Shows the current dir contents",
         exec(otherArgs: string[]) {
-            console.log(currentLocation.onLook());
+            console.log(currentLocation.onLook(), "\n");
         },
     },
     goto: {
@@ -153,9 +184,18 @@ const commands = {
     },
     attack: {
         desc: "Attack the admins in this directory",
-        exec(_) {
-            console.clear();
-            currentState = GameState.COMBAT;
+        exec([enemyName]) {
+            const enemy = currentLocation.items[enemyName];
+            if (enemy && enemy instanceof AdminEnemy) {
+                currentHackingGame = new HackingGame(enemy, 5, 15);
+                currentState = GameState.COMBAT;
+                return;
+            }
+
+            console.log(
+                escapeString("No root user named: ", EscapeCodes.FgYellow),
+                escapeString(enemyName, EscapeCodes.FgRed, EscapeCodes.Dim)
+            );
         },
     },
 } as Record<string, { desc: string; exec: (args: string[]) => void }>;
@@ -165,7 +205,7 @@ enum GameState {
     COMBAT,
 }
 
-let currentState = GameState.COMBAT;
+let currentState = GameState.TRAVERSE;
 
 const handleTraverseInput = (value: string) => {
     const args = value.split(" ");
@@ -180,13 +220,61 @@ const handleTraverseInput = (value: string) => {
     getNextInput();
 };
 
-let currentHackingGame = new HackingGame(5, 5);
+let currentHackingGame: HackingGame; //= new HackingGame(new AdminEnemy("TesstEnemy"), 5, 15);
 
 const getNextInput = () => {
     switch (currentState) {
         case GameState.TRAVERSE:
+            if (AdminEnemy.NumEnemies === 0) {
+                console.log("All root admins have been deleted, You Win.\n");
+
+                rl.close();
+                return;
+            }
+
+            // If there's enemies in this room, take 1 damage per enemy
+            const damage = Object.values(currentLocation.items).filter(
+                (item) => item instanceof AdminEnemy
+            ).length;
+
+            if (!!damage) {
+                health -= damage;
+                console.log(
+                    escapeString(
+                        "\tYou have taken ",
+                        EscapeCodes.BgCyan,
+                        EscapeCodes.FgYellow
+                    ) +
+                        escapeString(
+                            damage.toString(),
+                            EscapeCodes.BgCyan,
+                            EscapeCodes.FgYellow,
+                            EscapeCodes.Dim
+                        ) +
+                        escapeString(
+                            " Damage\t",
+                            EscapeCodes.BgCyan,
+                            EscapeCodes.FgYellow
+                        )
+                );
+            }
+
+            if (health <= 0) {
+                console.log("\n", "You got caught");
+                rl.close();
+                return;
+            }
+
             rl.question(
-                locationPrefix + currentLocation.fullPath() + ">",
+                locationPrefix +
+                    spacer +
+                    printHealth() +
+                    spacer +
+                    escapeString(
+                        currentLocation.fullPath() + ">",
+                        EscapeCodes.FgYellow,
+                        EscapeCodes.Dim
+                    ),
                 handleTraverseInput
             );
             break;
@@ -194,17 +282,59 @@ const getNextInput = () => {
             currentHackingGame.printBoard();
 
             rl.question(
-                "Hacking :: " + currentHackingGame.attempts + "Attepmpts :: >",
+                "Hacking" +
+                    spacer +
+                    escapeString(
+                        currentHackingGame.attempts.toString(),
+                        EscapeCodes.Underscore,
+                        EscapeCodes.FgCyan
+                    ) +
+                    " Attepmpts" +
+                    spacer +
+                    " >",
                 (value: string) => {
                     const result = currentHackingGame.guess(value);
 
                     switch (result.type) {
-                        case 
+                        case "complete":
+                            currentHackingGame.enemy.remove();
+                            console.log(
+                                escapeString(
+                                    "SUCCESS, " +
+                                        currentHackingGame.enemy.printName() +
+                                        " Deleted",
+                                    EscapeCodes.FgGreen
+                                )
+                            );
+
+                            // Restore 3 health by removing enemy
+                            health = Math.min(health + 3, maxHealth);
+
+                            currentState = GameState.TRAVERSE;
+                            getNextInput();
+                            return;
+
+                        case "similarity":
+                            console.log("Similarity: ", result.value);
+                            getNextInput();
+                            return;
                     }
                 }
             );
             break;
     }
 };
+
+console.log(
+    Object.entries(commands)
+        .map(([key, { desc }]) => {
+            return (
+                escapeString(key + ":") +
+                " " +
+                escapeString(desc, EscapeCodes.FgYellow, EscapeCodes.Dim)
+            );
+        })
+        .join("\n")
+);
 
 getNextInput();
