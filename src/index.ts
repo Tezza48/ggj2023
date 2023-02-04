@@ -84,11 +84,14 @@ export class Item {
 }
 
 export class Dir extends Item {
+    visited: boolean;
     parent?: Dir;
     items: Record<string, Item>;
 
     constructor(name: string, items?: Item[]) {
         super(name);
+
+        this.visited = false;
 
         this.items = Object.fromEntries((items ?? []).map((e) => [e.name, e]));
 
@@ -98,31 +101,49 @@ export class Dir extends Item {
     }
 
     printName(): string {
-        return escapeString(super.printName(), EscapeCodes.FgCyan);
+        return escapeString(
+            super.printName(),
+            ...(this.visited
+                ? [EscapeCodes.FgCyan, EscapeCodes.Dim]
+                : [EscapeCodes.FgCyan])
+        );
     }
 
     onLook(): string {
-        if (Object.values(this.items).length === 0) {
-            return "There is nothing in this directory";
+        let ret = "";
+        if (Object.values(this.items).length > 0) {
+            ret += Object.values(this.items)
+                .map((i) => "\t" + i.printName() + "\n")
+                .join("");
         }
 
-        return Object.values(this.items)
-            .map((i) => "\t" + i.printName())
-            .join("\n");
+        if (this.parent)
+            ret += escapeString("\t../", EscapeCodes.FgCyan, EscapeCodes.Dim);
+
+        return ret;
     }
 }
 
 export class AdminEnemy extends Item {
     static AllAdmins: AdminEnemy[] = [];
+    dificulty: number;
 
-    constructor(name: string) {
+    constructor(name: string, dificulty: number) {
         super(name);
 
+        this.dificulty = dificulty;
         AdminEnemy.AllAdmins.push(this);
     }
 
     printName() {
-        return escapeString(this.name, EscapeCodes.FgRed, EscapeCodes.Blink);
+        return (
+            escapeString(this.name, EscapeCodes.FgRed, EscapeCodes.Blink) +
+            escapeString(
+                `\t(${this.dificulty.toString()})`,
+                EscapeCodes.FgWhite,
+                EscapeCodes.Dim
+            )
+        );
     }
 
     remove() {
@@ -132,28 +153,25 @@ export class AdminEnemy extends Item {
     }
 }
 
-// prettier-ignore
-const levelRoot = 
-new Dir("/", [
+const levelRoot = new Dir("/", [
+    new AdminEnemy("Hax0rDltr", 10),
     new Dir("user/", [
         new Dir("tez/", [
-            new Dir("code/", [
-                new Dir("game_jam/")
-            ]),
-            new AdminEnemy("AdminTez"),
+            new AdminEnemy("AdminTez", 5),
+            new Dir("code/", [new Dir("game_jam/")]),
         ]),
-        new Dir("history/", [
-            new Dir("skyrim_mods/")
-        ]),
+        new Dir("history/", [new Dir("skyrim_mods/")]),
         new Dir("admin/"),
     ]),
     new Dir("device/", [
         new Dir("gpu/", [
-            new Dir("drivers/"), 
-            new AdminEnemy("AdminVulkan")
+            new Dir("drivers/"),
+            new AdminEnemy("AdminVulkan", 5),
         ]),
     ]),
-    new Dir("programs/"),
+    new Dir("programs/", [
+        new Dir("macrohard/", [new AdminEnemy("Hax0rDltr", 10)]),
+    ]),
 ]);
 
 class Player {
@@ -196,7 +214,7 @@ const commands = {
         },
     },
     goto: {
-        desc: "[dir name] Changes to the specified directory.",
+        desc: "[dir name] Changes to the specified directory. Use '../' to return to the parent dir.",
         exec(otherArgs: string[]) {
             if (otherArgs.length !== 1) {
                 console.log("Too many args");
@@ -209,7 +227,7 @@ const commands = {
             if (target && target instanceof Dir) {
                 player.location = target;
                 return;
-            } else if (otherArgs[0] === "..") {
+            } else if (otherArgs[0] === "../") {
                 player.location = player.location.parent ?? player.location;
             } else {
                 console.log("Cannot goto", targetName);
@@ -221,7 +239,7 @@ const commands = {
         exec([enemyName]) {
             const enemy = player.location.items[enemyName];
             if (enemy && enemy instanceof AdminEnemy) {
-                currentHackingGame = new HackingGame(enemy, 5, 15);
+                currentHackingGame = new HackingGame(enemy);
                 currentState = GameState.COMBAT;
                 return;
             }
@@ -308,12 +326,12 @@ const tickAdminAi = () => {
             }
 
             if (admin.parent !== oldParent) {
-                console.log(
-                    escapeString(
-                        admin.name + " moved to " + admin.fullPath(),
-                        EscapeCodes.Dim
-                    )
-                );
+                // console.log(
+                //     escapeString(
+                //         admin.name + " moved to " + admin.fullPath(),
+                //         EscapeCodes.Dim
+                //     )
+                // );
             }
         }
     }
@@ -321,6 +339,8 @@ const tickAdminAi = () => {
 
 const handleTraverseInput = (value: string) => {
     tickAdminAi();
+
+    player.location.visited = true;
 
     const args = value.split(" ");
 

@@ -11,11 +11,13 @@ export class HackingGame {
 
     attempts: number;
 
-    constructor(enemy: AdminEnemy, wordLength: number, numWords: number) {
+    constructor(enemy: AdminEnemy) {
         this.enemy = enemy;
 
+        const numWords = 15;
+
         const all = (wordMap as Record<string, string[]>)[
-            wordLength.toString()
+            enemy.dificulty.toString()
         ];
         this.words = [];
 
