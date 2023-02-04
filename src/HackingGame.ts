@@ -30,11 +30,15 @@ export class HackingGame {
     }
 
     guess(word: string) {
-        if (this.words.indexOf(word)) {
+        if (word == this.correctWord) {
             return { type: "complete" } as const;
         }
 
         this.attempts--;
+
+        if (this.attempts <= 0) {
+            return { type: "failed" } as const;
+        }
 
         let similarity = 0;
 
@@ -48,7 +52,7 @@ export class HackingGame {
     }
 
     printBoard() {
-        console.log("Hacking: " + this.enemy.printName());
+        console.log("\n\n\tHacking ::" + this.enemy.printName());
         console.log(this.words.join("\n"));
     }
 }

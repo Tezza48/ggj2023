@@ -113,7 +113,7 @@ export class AdminEnemy extends Item {
     }
 
     printName() {
-        return escapeString(this.name, EscapeCodes.FgRed, EscapeCodes.Blink); //"\x1b[31m" + this.name + "\x1b[0m";
+        return escapeString(this.name, EscapeCodes.FgRed, EscapeCodes.Blink);
     }
 
     remove() {
@@ -147,29 +147,43 @@ new Dir("/", [
     new Dir("programs/"),
 ]);
 
-const maxHealth = 10;
-let health = 10;
+class Player {
+    location!: Dir;
+    readonly maxHealth = 10;
+    health: number = 10;
 
-function printHealth() {
-    let str = "";
-    for (let i = 1; i <= maxHealth; i++) {
-        if (i < health) {
-            str += escapeString("▓", EscapeCodes.FgGreen, EscapeCodes.Bright);
-        } else if (i === health) {
-            str += escapeString("▒", EscapeCodes.FgGreen, EscapeCodes.Blink);
-        } else {
-            str += escapeString("░", EscapeCodes.FgRed, EscapeCodes.Dim);
+    printHealth(): string {
+        let str = "";
+        for (let i = 1; i <= this.maxHealth; i++) {
+            if (i < this.health) {
+                str += escapeString(
+                    "▓",
+                    EscapeCodes.FgGreen,
+                    EscapeCodes.Bright
+                );
+            } else if (i === this.health) {
+                str += escapeString(
+                    "▒",
+                    EscapeCodes.FgGreen,
+                    EscapeCodes.Blink
+                );
+            } else {
+                str += escapeString("░", EscapeCodes.FgRed, EscapeCodes.Dim);
+            }
         }
-    }
 
-    return str;
+        return str;
+    }
 }
+
+const player = new Player();
+player.location = levelRoot;
 
 const commands = {
     look: {
         desc: "Shows the current dir contents.",
         exec(otherArgs: string[]) {
-            console.log(currentLocation.onLook(), "\n");
+            console.log(player.location.onLook(), "\n");
         },
     },
     goto: {
@@ -181,13 +195,13 @@ const commands = {
             }
 
             const targetName = otherArgs[0];
-            const target = currentLocation.items[targetName];
+            const target = player.location.items[targetName];
 
             if (target && target instanceof Dir) {
-                currentLocation = target;
+                player.location = target;
                 return;
             } else if (otherArgs[0] === "..") {
-                currentLocation = currentLocation.parent ?? currentLocation;
+                player.location = player.location.parent ?? player.location;
             } else {
                 console.log("Cannot goto", targetName);
             }
@@ -196,12 +210,14 @@ const commands = {
     attack: {
         desc: "[target name] Attack a root admin.",
         exec([enemyName]) {
-            const enemy = currentLocation.items[enemyName];
+            const enemy = player.location.items[enemyName];
             if (enemy && enemy instanceof AdminEnemy) {
                 currentHackingGame = new HackingGame(enemy, 5, 15);
                 currentState = GameState.COMBAT;
                 return;
             }
+
+            process.stdout.write("a");
 
             console.log(
                 escapeString("No root user named: ", EscapeCodes.FgYellow),
@@ -264,12 +280,12 @@ const getNextInput = () => {
             }
 
             // If there's enemies in this room, take 1 damage per enemy
-            const damage = Object.values(currentLocation.items).filter(
+            const damage = Object.values(player.location.items).filter(
                 (item) => item instanceof AdminEnemy
             ).length;
 
             if (!!damage) {
-                health -= damage;
+                player.health -= damage;
                 console.log(
                     escapeString(
                         "\tYou have taken ",
@@ -289,7 +305,7 @@ const getNextInput = () => {
                 );
             }
 
-            if (health <= 0) {
+            if (player.health <= 0) {
                 console.log("\n", "You got caught");
                 rl.close();
                 return;
@@ -298,10 +314,10 @@ const getNextInput = () => {
             rl.question(
                 locationPrefix +
                     spacer +
-                    printHealth() +
+                    player.printHealth() +
                     spacer +
                     escapeString(
-                        currentLocation.fullPath() + ">",
+                        player.location.fullPath() + ">",
                         EscapeCodes.FgYellow,
                         EscapeCodes.Dim
                     ),
@@ -338,7 +354,10 @@ const getNextInput = () => {
                             );
 
                             // Restore 3 health by removing enemy
-                            health = Math.min(health + 3, maxHealth);
+                            player.health = Math.min(
+                                player.health + 3,
+                                player.maxHealth
+                            );
 
                             currentState = GameState.TRAVERSE;
                             getNextInput();
@@ -346,6 +365,15 @@ const getNextInput = () => {
 
                         case "similarity":
                             console.log("Similarity: ", result.value);
+                            getNextInput();
+                            return;
+
+                        case "failed":
+                            console.log(
+                                escapeString("FAILURE: LockOut initiated")
+                            );
+
+                            currentState = GameState.TRAVERSE;
                             getNextInput();
                             return;
                     }
