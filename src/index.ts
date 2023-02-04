@@ -65,8 +65,21 @@ export class Item {
         return this.name;
     }
 
+    setDirectory(dir: Dir) {
+        if (this.parent) {
+            delete this.parent.items[this.name];
+        }
+
+        dir.items[this.name] = this;
+        this.parent = dir;
+    }
+
     remove() {
         delete this.parent?.items[this.name];
+    }
+
+    fullPath(): string {
+        return this.parent ? this.parent.fullPath() + this.name : this.name;
     }
 }
 
@@ -88,10 +101,6 @@ export class Dir extends Item {
         return escapeString(super.printName(), EscapeCodes.FgCyan);
     }
 
-    fullPath(): string {
-        return this.parent ? this.parent.fullPath() + this.name : this.name;
-    }
-
     onLook(): string {
         if (Object.values(this.items).length === 0) {
             return "There is nothing in this directory";
@@ -104,12 +113,12 @@ export class Dir extends Item {
 }
 
 export class AdminEnemy extends Item {
-    static NumEnemies = 0;
+    static AllAdmins: AdminEnemy[] = [];
 
     constructor(name: string) {
         super(name);
 
-        AdminEnemy.NumEnemies++;
+        AdminEnemy.AllAdmins.push(this);
     }
 
     printName() {
@@ -119,7 +128,7 @@ export class AdminEnemy extends Item {
     remove() {
         super.remove();
 
-        AdminEnemy.NumEnemies--;
+        AdminEnemy.AllAdmins.splice(AdminEnemy.AllAdmins.indexOf(this), 1);
     }
 }
 
@@ -254,7 +263,65 @@ enum GameState {
 
 let currentState = GameState.TRAVERSE;
 
+const aiMoveInterval = 3;
+let traverseMoves = 0;
+
+/**
+ * Admins can move every n turns.
+ * Admins can move to a parent or a random child directory
+ *
+ * Admins wont move if the player is in the same directory as them.
+ */
+
+const tickAdminAi = () => {
+    traverseMoves++;
+    if (traverseMoves % aiMoveInterval === 0) {
+        for (const admin of AdminEnemy.AllAdmins) {
+            if (admin.parent == player.location) {
+                continue;
+            }
+
+            const moveDir = Math.random() > 0.5 ? "parent" : "child";
+
+            const oldParent = admin.parent!;
+
+            switch (moveDir) {
+                case "child":
+                    const dirsInParent = Object.values(
+                        admin.parent!.items
+                    ).filter((e) => e instanceof Dir) as Dir[];
+
+                    if (dirsInParent.length > 0) {
+                        const newDir =
+                            dirsInParent[
+                                Math.floor(Math.random() * dirsInParent.length)
+                            ];
+                        admin.setDirectory(newDir);
+                    }
+                    break;
+                case "parent":
+                    if (admin.parent?.parent) {
+                        const newDir = admin.parent.parent;
+                        admin.setDirectory(newDir);
+                    }
+                    break;
+            }
+
+            if (admin.parent !== oldParent) {
+                console.log(
+                    escapeString(
+                        admin.name + " moved to " + admin.fullPath(),
+                        EscapeCodes.Dim
+                    )
+                );
+            }
+        }
+    }
+};
+
 const handleTraverseInput = (value: string) => {
+    tickAdminAi();
+
     const args = value.split(" ");
 
     const command = commands[args[0] as keyof typeof commands];
@@ -267,12 +334,45 @@ const handleTraverseInput = (value: string) => {
     getNextInput();
 };
 
+const handleHackingInput = (value: string) => {
+    const result = currentHackingGame.guess(value);
+
+    switch (result.type) {
+        case "complete":
+            currentHackingGame.enemy.remove();
+            console.log(
+                escapeString("SUCCESS :: ", EscapeCodes.FgGreen) +
+                    currentHackingGame.enemy.printName() +
+                    escapeString(" Deleted", EscapeCodes.FgGreen)
+            );
+
+            // Restore 3 health by removing enemy
+            player.health = Math.min(player.health + 3, player.maxHealth);
+
+            currentState = GameState.TRAVERSE;
+            getNextInput();
+            return;
+
+        case "similarity":
+            console.log("Similarity: ", result.value);
+            getNextInput();
+            return;
+
+        case "failed":
+            console.log(escapeString("FAILURE: LockOut initiated"));
+
+            currentState = GameState.TRAVERSE;
+            getNextInput();
+            return;
+    }
+};
+
 let currentHackingGame: HackingGame; //= new HackingGame(new AdminEnemy("TesstEnemy"), 5, 15);
 
 const getNextInput = () => {
     switch (currentState) {
         case GameState.TRAVERSE:
-            if (AdminEnemy.NumEnemies === 0) {
+            if (AdminEnemy.AllAdmins.length === 0) {
                 console.log("All root admins have been deleted, You Win.\n");
 
                 rl.close();
@@ -338,46 +438,7 @@ const getNextInput = () => {
                     " Attepmpts" +
                     spacer +
                     " >",
-                (value: string) => {
-                    const result = currentHackingGame.guess(value);
-
-                    switch (result.type) {
-                        case "complete":
-                            currentHackingGame.enemy.remove();
-                            console.log(
-                                escapeString(
-                                    "SUCCESS, " +
-                                        currentHackingGame.enemy.printName() +
-                                        " Deleted",
-                                    EscapeCodes.FgGreen
-                                )
-                            );
-
-                            // Restore 3 health by removing enemy
-                            player.health = Math.min(
-                                player.health + 3,
-                                player.maxHealth
-                            );
-
-                            currentState = GameState.TRAVERSE;
-                            getNextInput();
-                            return;
-
-                        case "similarity":
-                            console.log("Similarity: ", result.value);
-                            getNextInput();
-                            return;
-
-                        case "failed":
-                            console.log(
-                                escapeString("FAILURE: LockOut initiated")
-                            );
-
-                            currentState = GameState.TRAVERSE;
-                            getNextInput();
-                            return;
-                    }
-                }
+                handleHackingInput
             );
             break;
     }
