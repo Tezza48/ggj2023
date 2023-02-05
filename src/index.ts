@@ -141,8 +141,7 @@ export class Dir extends Item {
                 .join("");
         }
 
-        if (this.parent)
-            ret += escapeString("\t../", EscapeCodes.FgCyan, EscapeCodes.Dim);
+        if (this.parent) ret += escapeString("\t../", EscapeCodes.FgCyan);
 
         return ret;
     }
@@ -336,8 +335,6 @@ const commands = {
                 currentState = GameState.COMBAT;
                 return;
             }
-
-            process.stdout.write("a");
 
             console.log(
                 escapeString("No root user named: ", EscapeCodes.FgYellow),
@@ -584,13 +581,6 @@ let currentHackingGame: HackingGame;
 const getNextInput = () => {
     switch (currentState) {
         case GameState.TRAVERSE:
-            if (AdminEnemy.AllAdmins.length === 0) {
-                console.log("All root admins have been deleted, You Win.\n");
-
-                rl.close();
-                return;
-            }
-
             // If there's enemies in this room, take 1 damage per enemy
             if (player.turnsInDirectory > 0) {
                 const damage = Object.values(player.location.items).filter(
@@ -654,7 +644,7 @@ const getNextInput = () => {
                         EscapeCodes.Underscore,
                         EscapeCodes.FgCyan
                     ) +
-                    " Attepmpts" +
+                    " Attempts" +
                     spacer +
                     " >",
                 handleHackingInput
@@ -663,14 +653,32 @@ const getNextInput = () => {
     }
 };
 
-console.log(
-    escapeString(`
-Welcome to ROOTUSER, hack into the mainfraim and steal as much data as you can.
-Be sure not to get deleted by the ADMINs, they will steal back data from you.
-If you're in too deep you can 'quit' while youre ahead to leave with whatever
-data you've got so far.\n\n`)
-);
+// Ascii art generated with https://patorjk.com/software/taag/#p=testall&h=0&v=1&f=Graffiti&t=RootUser
 
-commands["help"].exec();
+// prettier-ignore
+console.log(`
+8888888b.                    888    888     888                           
+888   Y88b                   888    888     888                           
+888    888                   888    888     888                           
+888   d88P  .d88b.   .d88b.  888888 888     888 .d8888b   .d88b.  888d888 
+8888888P"  d88""88b d88""88b 888    888     888 88K      d8P  Y8b 888P"   
+888 T88b   888  888 888  888 888    888     888 "Y8888b. 88888888 888     
+888  T88b  Y88..88P Y88..88P Y88b.  Y88b. .d88P      X88 Y8b.     888     
+888   T88b  "Y88P"   "Y88P"   "Y888  "Y88888P"   88888P'  "Y8888  888     
+`);
 
-getNextInput();
+setTimeout(() => {
+    console.log(
+        escapeString(`
+    Welcome to ROOTUSER, hack into the mainfraim and steal as much data as you can.
+    Be sure not to get deleted by the ADMINs, they will steal back data from you.
+    If you're in too deep you can 'quit' while youre ahead to leave with whatever
+    data you've got so far.\n\n`)
+    );
+
+    setTimeout(() => {
+        commands["help"].exec();
+
+        getNextInput();
+    }, 500);
+}, 500);
