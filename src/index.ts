@@ -522,7 +522,13 @@ const handleTraverseInput = (value: string) => {
 
     if (command === commands.quit) {
         // Stop the game immediately
-        rl.close();
+
+        rl.question(
+            escapeString("press enter to quit...", EscapeCodes.FgGray),
+            () => {
+                rl.close();
+            }
+        );
         return;
     }
 
