@@ -1,6 +1,6 @@
 {
     "name": "ggj2023_text_adventure",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "description": "",
     "main": "./lib/index.js",
     "bin": {
@@ -25,7 +25,7 @@
         "butler:win": "butler push ./build/rootuser_ggj2023-win.exe tezza48/rootuser:win",
         "butler:linux": "butler push ./build/rootuser_ggj2023-linux tezza48/rootuser:linux",
         "butler:macos": "butler push ./build/rootuser_ggj2023-macos tezza48/rootuser:macos",
-        "butler": "npm run butler:win && npm run butler:linux"
+        "butler": "npm run butler:win && npm run butler:linux && npm run butler:macos"
     },
     "author": "",
     "license": "ISC",

@@ -50,7 +50,8 @@ export declare class Dir extends Item {
 export declare class AdminEnemy extends Item {
     static AllAdmins: AdminEnemy[];
     dificulty: number;
-    constructor(name: string, dificulty: number);
+    moveInterval: number;
+    constructor(name: string, dificulty: number, moveInterval: number);
     printName(): string;
     remove(): void;
 }

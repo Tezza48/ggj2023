@@ -95,12 +95,13 @@ export class Item {
 }
 
 class TextFile extends Item {
-    text: string;
-    public constructor(name: `${string}.txt`, text: string) {
+    text: string = "There is nothing of interest in this file.";
+    public constructor(name: `${string}.txt`, text?: string) {
         super(name);
 
-        this.text = text;
+        if (text) this.text = text;
     }
+
     onRead(): string {
         return this.text;
     }
@@ -140,8 +141,7 @@ export class Dir extends Item {
                 .join("");
         }
 
-        if (this.parent)
-            ret += escapeString("\t../", EscapeCodes.FgCyan, EscapeCodes.Dim);
+        if (this.parent) ret += escapeString("\t../", EscapeCodes.FgCyan);
 
         return ret;
     }
@@ -151,11 +151,15 @@ export class AdminEnemy extends Item {
     static AllAdmins: AdminEnemy[] = [];
     dificulty: number;
 
-    constructor(name: string, dificulty: number) {
+    moveInterval: number;
+
+    constructor(name: string, dificulty: number, moveInterval: number) {
         super(name);
 
         this.dificulty = dificulty;
         AdminEnemy.AllAdmins.push(this);
+
+        this.moveInterval = moveInterval;
     }
 
     printName() {
@@ -198,20 +202,43 @@ class ImportantFile extends Item {
 const levelRoot = new Dir("/", [
     new Dir("user/", [
         new Dir("tez/", [
-            new Dir("code/", [new Dir("game_jam/")]),
-            new AdminEnemy("AdminTez", 5),
+            new Dir("code/", [
+                new Dir("game_jam/", [
+                    new TextFile("hacking-game.txt", "// TODO: Make game."),
+                    new ImportantFile("node_modules", 20),
+                ]),
+            ]),
+            new AdminEnemy("AdminTez", 5, 2),
         ]),
-        new Dir("history/", [new Dir("skyrim_mods/")]),
+        new Dir("historymaker/", [
+            new Dir("skyrim/", [
+                new ImportantFile("skyrim", 15),
+                new ImportantFile(".savefile", 20),
+            ]),
+        ]),
         new Dir("admin/"),
     ]),
     new Dir("device/", [
         new Dir("gpu/", [
             new Dir("drivers/"),
-            new AdminEnemy("AdminVulkan", 5),
+            new AdminEnemy("VulkanProgrammer", 6, 8),
         ]),
     ]),
     new Dir("programs/", [
-        new Dir("macrohard/", [new AdminEnemy("Hax0rDltr", 10)]),
+        new Dir("vim/", [new ImportantFile("vimconfig", 5)]),
+        new Dir("bank/", [
+            new Dir("misc/"),
+            new AdminEnemy("cfo", 5, -1),
+            new AdminEnemy("guardian", 6, -1),
+            new ImportantFile("crypto-keys", 40),
+        ]),
+        new Dir("macrohard/", [new AdminEnemy("HaxorDeletor", 10, 5)]),
+    ]),
+    new Dir("system/", [
+        new Dir("os/"),
+        new TextFile("keys.txt"),
+        new TextFile("registry.txt"),
+        new ImportantFile("private_keys", 10),
     ]),
     new TextFile(
         "README.txt",
@@ -227,6 +254,7 @@ be deleted and most importantly copied.
 `
     ),
     new ImportantFile("plaintext_passwords", 5),
+    new AdminEnemy("JuniorAdmin", 4, 1),
 ]);
 
 class Player {
@@ -307,8 +335,6 @@ const commands = {
                 currentState = GameState.COMBAT;
                 return;
             }
-
-            process.stdout.write("a");
 
             console.log(
                 escapeString("No root user named: ", EscapeCodes.FgYellow),
@@ -420,7 +446,7 @@ enum GameState {
 let currentState = GameState.TRAVERSE;
 
 const aiMoveInterval = 3;
-let traverseMoves = 0;
+let turnNumber = 0;
 
 /**
  * Admins can move every n turns.
@@ -430,13 +456,15 @@ let traverseMoves = 0;
  */
 
 const tickAdminAi = () => {
-    traverseMoves++;
-    if (traverseMoves % aiMoveInterval != 0) return;
+    turnNumber++;
 
+    let hasAnyMoved = false;
     for (const admin of AdminEnemy.AllAdmins) {
-        if (admin.parent == player.location) {
+        if (admin.parent == player.location || admin.moveInterval === -1) {
             continue;
         }
+
+        if (turnNumber % admin.moveInterval != 0) continue;
 
         const moveDir = Math.random() > 0.5 ? "parent" : "child";
 
@@ -465,6 +493,7 @@ const tickAdminAi = () => {
         }
 
         if (admin.parent !== oldParent) {
+            hasAnyMoved = true;
             // console.log(
             //     escapeString(
             //         admin.name + " moved to " + admin.fullPath(),
@@ -474,7 +503,7 @@ const tickAdminAi = () => {
         }
     }
 
-    printMessage("Admins have moved");
+    if (hasAnyMoved) printMessage("Admins have moved");
 };
 
 const handleTraverseInput = (value: string) => {
@@ -552,13 +581,6 @@ let currentHackingGame: HackingGame;
 const getNextInput = () => {
     switch (currentState) {
         case GameState.TRAVERSE:
-            if (AdminEnemy.AllAdmins.length === 0) {
-                console.log("All root admins have been deleted, You Win.\n");
-
-                rl.close();
-                return;
-            }
-
             // If there's enemies in this room, take 1 damage per enemy
             if (player.turnsInDirectory > 0) {
                 const damage = Object.values(player.location.items).filter(
@@ -622,7 +644,7 @@ const getNextInput = () => {
                         EscapeCodes.Underscore,
                         EscapeCodes.FgCyan
                     ) +
-                    " Attepmpts" +
+                    " Attempts" +
                     spacer +
                     " >",
                 handleHackingInput
@@ -631,14 +653,32 @@ const getNextInput = () => {
     }
 };
 
-console.log(
-    escapeString(`
-Welcome to ROOTUSER, hack into the mainfraim and steal as much data as you can.
-Be sure not to get deleted by the ADMINs, they will steal back data from you.
-If you're in too deep you can 'quit' while youre ahead to leave with whatever
-data you've got so far.\n\n`)
-);
+// Ascii art generated with https://patorjk.com/software/taag/#p=testall&h=0&v=1&f=Graffiti&t=RootUser
 
-commands["help"].exec();
+// prettier-ignore
+console.log(`
+8888888b.                    888    888     888                           
+888   Y88b                   888    888     888                           
+888    888                   888    888     888                           
+888   d88P  .d88b.   .d88b.  888888 888     888 .d8888b   .d88b.  888d888 
+8888888P"  d88""88b d88""88b 888    888     888 88K      d8P  Y8b 888P"   
+888 T88b   888  888 888  888 888    888     888 "Y8888b. 88888888 888     
+888  T88b  Y88..88P Y88..88P Y88b.  Y88b. .d88P      X88 Y8b.     888     
+888   T88b  "Y88P"   "Y88P"   "Y888  "Y88888P"   88888P'  "Y8888  888     
+`);
 
-getNextInput();
+setTimeout(() => {
+    console.log(
+        escapeString(`
+    Welcome to ROOTUSER, hack into the mainfraim and steal as much data as you can.
+    Be sure not to get deleted by the ADMINs, they will steal back data from you.
+    If you're in too deep you can 'quit' while youre ahead to leave with whatever
+    data you've got so far.\n\n`)
+    );
+
+    setTimeout(() => {
+        commands["help"].exec();
+
+        getNextInput();
+    }, 500);
+}, 500);
